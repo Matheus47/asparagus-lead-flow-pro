@@ -1,5 +1,5 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,11 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
+import { Toaster } from '@/components/ui/toaster';
 import { 
-  Settings, 
   Link as LinkIcon, 
   Users, 
-  Bell, 
   RefreshCw,
   CheckCircle2,
   XCircle,
@@ -21,6 +21,10 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Configuracoes() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [loadingButtons, setLoadingButtons] = useState({});
+
   const { data: integrations = [] } = useQuery({
     queryKey: ['integrations'],
     queryFn: () => base44.entities.Integration.list('-created_date', 100)
@@ -30,6 +34,45 @@ export default function Configuracoes() {
     queryKey: ['syncLogs'],
     queryFn: () => base44.entities.SyncLog.list('-started_at', 20)
   });
+
+  const setLoading = (key, val) => setLoadingButtons(prev => ({ ...prev, [key]: val }));
+
+  const handleSync = async (integration) => {
+    const key = `sync_${integration.id}`;
+    setLoading(key, true);
+    const res = await base44.functions.invoke('syncIntegration', {
+      integrationId: integration.id,
+      integrationType: integration.type,
+      workspaceId: integration.workspace_id,
+      syncType: 'incremental'
+    });
+    setLoading(key, false);
+    if (res.data?.success) {
+      toast({ title: 'Sincronização concluída', description: `${res.data.records_processed} registros processados.` });
+      queryClient.invalidateQueries({ queryKey: ['integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['syncLogs'] });
+    } else {
+      toast({ title: 'Erro na sincronização', description: res.data?.error || 'Tente novamente.', variant: 'destructive' });
+    }
+  };
+
+  const handleDisconnect = async (integration) => {
+    const key = `disconnect_${integration.id}`;
+    setLoading(key, true);
+    await base44.entities.Integration.update(integration.id, { status: 'disconnected', access_token: '', refresh_token: '' });
+    setLoading(key, false);
+    toast({ title: 'Integração desconectada' });
+    queryClient.invalidateQueries({ queryKey: ['integrations'] });
+  };
+
+  const handleConnect = async (type) => {
+    const key = `connect_${type}`;
+    setLoading(key, true);
+    // In production this would trigger the OAuth flow; here we simulate it
+    await new Promise(r => setTimeout(r, 1000));
+    setLoading(key, false);
+    toast({ title: 'Conecte sua conta', description: `Configure as credenciais de ${type} nas configurações da integração.` });
+  };
 
   const getStatusBadge = (status) => {
     const config = {
@@ -110,12 +153,22 @@ export default function Configuracoes() {
                           )}
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="flex-1">
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Sincronizar
+                          <Button
+                            variant="outline" size="sm" className="flex-1"
+                            disabled={loadingButtons[`sync_${integration.id}`]}
+                            onClick={() => handleSync(integration)}
+                          >
+                            <RefreshCw className={`w-4 h-4 mr-2 ${loadingButtons[`sync_${integration.id}`] ? 'animate-spin' : ''}`} />
+                            {loadingButtons[`sync_${integration.id}`] ? 'Sincronizando...' : 'Sincronizar agora'}
                           </Button>
-                          <Button variant="outline" size="sm">
-                            Desconectar
+                          <Button
+                            variant="outline" size="sm"
+                            disabled={loadingButtons[`disconnect_${integration.id}`]}
+                            onClick={() => handleDisconnect(integration)}
+                          >
+                            {loadingButtons[`disconnect_${integration.id}`] ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : 'Desconectar'}
                           </Button>
                         </div>
                       </>
@@ -124,9 +177,17 @@ export default function Configuracoes() {
                         <p className="text-sm text-muted-foreground">
                           Conecte sua conta {config.name} para importar dados automaticamente
                         </p>
-                        <Button className="w-full bg-[#2E86AB] hover:bg-[#1E3A5F]">
-                          <LinkIcon className="w-4 h-4 mr-2" />
-                          Conectar
+                        <Button
+                          className="w-full bg-[#2E86AB] hover:bg-[#1E3A5F]"
+                          disabled={loadingButtons[`connect_${type}`]}
+                          onClick={() => handleConnect(type)}
+                        >
+                          {loadingButtons[`connect_${type}`] ? (
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <LinkIcon className="w-4 h-4 mr-2" />
+                          )}
+                          {loadingButtons[`connect_${type}`] ? 'Conectando...' : 'Conectar'}
                         </Button>
                       </>
                     )}
@@ -263,6 +324,7 @@ export default function Configuracoes() {
           </Card>
         </TabsContent>
       </Tabs>
+      <Toaster />
     </div>
   );
 }

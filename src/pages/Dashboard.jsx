@@ -43,14 +43,22 @@ export default function Dashboard() {
     queryFn: () => base44.entities.AIInsight.filter({ is_read: false }, '-generated_at', 10)
   });
 
-  // Filter leads by period
-  const startDate = subDays(new Date(), parseInt(period));
+  // Filter leads by period using rd_created_at
+  const periodDays = parseInt(period);
+  const startDate = subDays(new Date(), periodDays);
+  const prevStartDate = subDays(new Date(), periodDays * 2);
+
   const filteredLeads = leads.filter(lead => {
-    const createdDate = new Date(lead.created_date);
+    const createdDate = new Date(lead.rd_created_at || lead.created_date);
     const inPeriod = createdDate >= startDate;
     const matchChannel = channelFilter === 'all' || lead.origin_channel === channelFilter;
     const matchStage = stageFilter === 'all' || lead.lifecycle_stage === stageFilter;
     return inPeriod && matchChannel && matchStage;
+  });
+
+  const prevPeriodLeads = leads.filter(lead => {
+    const createdDate = new Date(lead.rd_created_at || lead.created_date);
+    return createdDate >= prevStartDate && createdDate < startDate;
   });
 
   // Calculate KPIs
@@ -59,18 +67,28 @@ export default function Dashboard() {
   const opportunities = filteredLeads.filter(l => l.is_opportunity).length;
   const clients = filteredLeads.filter(l => l.is_client).length;
   
-  const totalSpend = campaigns.reduce((sum, c) => sum + (c.spend || 0), 0) / 100; // Convert from cents
+  const totalSpend = campaigns.reduce((sum, c) => sum + (c.spend || 0), 0) / 100;
   const cpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
 
-  // Calculate trends (mock for now)
-  const leadTrend = 15.2;
-  const mqlTrend = 22.8;
-  const oppTrend = -5.3;
-  const clientTrend = 8.1;
+  // Calculate real trends comparing current vs previous period
+  const prevTotal = prevPeriodLeads.length;
+  const prevMqls = prevPeriodLeads.filter(l => l.is_mql).length;
+  const prevOpps = prevPeriodLeads.filter(l => l.is_opportunity).length;
+  const prevClients = prevPeriodLeads.filter(l => l.is_client).length;
+
+  const calcTrend = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return parseFloat(((current - previous) / previous * 100).toFixed(1));
+  };
+
+  const leadTrend = calcTrend(totalLeads, prevTotal);
+  const mqlTrend = calcTrend(mqls, prevMqls);
+  const oppTrend = calcTrend(opportunities, prevOpps);
+  const clientTrend = calcTrend(clients, prevClients);
 
   // Group leads by date for timeline chart
   const leadsTimeline = filteredLeads.reduce((acc, lead) => {
-    const date = format(new Date(lead.created_date), 'yyyy-MM-dd');
+    const date = format(new Date(lead.rd_created_at || lead.created_date), 'yyyy-MM-dd');
     if (!acc[date]) {
       acc[date] = { date, leads: 0, mqls: 0, opportunities: 0, clients: 0 };
     }

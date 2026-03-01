@@ -44,6 +44,9 @@ export default function Insights() {
   const [expandedInsight, setExpandedInsight] = useState(null);
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [followUps, setFollowUps] = useState([]);
+  const chatEndRef = React.useRef(null);
   const queryClient = useQueryClient();
 
   const { data: insights = [], isLoading } = useQuery({
@@ -64,24 +67,32 @@ export default function Insights() {
 
   const unreadCount = insights.filter(i => !i.is_read).length;
 
-  const handleSendMessage = async () => {
-    if (!chatMessage.trim()) return;
+  const handleSendMessage = async (messageOverride) => {
+    const text = (messageOverride || chatMessage).trim();
+    if (!text) return;
 
-    const userMessage = { role: 'user', content: chatMessage };
-    setChatHistory(prev => [...prev, userMessage]);
+    const userMsg = { role: 'user', content: text };
+    setChatHistory(prev => [...prev, userMsg]);
     setChatMessage('');
+    setFollowUps([]);
+    setIsChatLoading(true);
 
-    // Mock AI response - in production this would call a backend function
-    setTimeout(() => {
-      const aiMessage = {
-        role: 'assistant',
-        content: 'Analisando seus dados... Esta é uma resposta de exemplo. Em produção, isso seria gerado por IA com base nos dados reais do seu workspace.'
-      };
-      setChatHistory(prev => [...prev, aiMessage]);
-    }, 1000);
+    const updatedHistory = [...chatHistory, userMsg];
+
+    const response = await base44.functions.invoke('chatWithData', {
+      workspaceId: 'demo',
+      userMessage: text,
+      chatHistory: updatedHistory.slice(-6)
+    });
+
+    const { answer, followUps: newFollowUps = [] } = response.data;
+    setChatHistory(prev => [...prev, { role: 'assistant', content: answer }]);
+    setFollowUps(newFollowUps);
+    setIsChatLoading(false);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
-  const suggestedQuestions = [
+  const initialSuggestions = [
     "Qual canal trouxe mais MQLs este mês?",
     "Por que meu CPL aumentou na última semana?",
     "Qual campanha tem melhor ROAS?",
@@ -224,17 +235,17 @@ export default function Insights() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Suggested Questions */}
+              {/* Suggested Questions (initial) */}
               {chatHistory.length === 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground mb-2">Perguntas sugeridas:</p>
-                  {suggestedQuestions.map((question, index) => (
+                  {initialSuggestions.map((question, index) => (
                     <Button
                       key={index}
                       variant="outline"
                       size="sm"
                       className="w-full text-left justify-start h-auto py-2 px-3 text-xs"
-                      onClick={() => setChatMessage(question)}
+                      onClick={() => handleSendMessage(question)}
                     >
                       {question}
                     </Button>
@@ -244,7 +255,7 @@ export default function Insights() {
 
               {/* Chat History */}
               {chatHistory.length > 0 && (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="space-y-3 max-h-80 overflow-y-auto">
                   {chatHistory.map((message, index) => (
                     <div 
                       key={index} 
@@ -257,6 +268,30 @@ export default function Insights() {
                       {message.content}
                     </div>
                   ))}
+                  {isChatLoading && (
+                    <div className="bg-muted mr-8 p-3 rounded-lg flex gap-1 items-center">
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
+                  {followUps.length > 0 && !isChatLoading && (
+                    <div className="space-y-1 pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">Perguntas relacionadas:</p>
+                      {followUps.map((q, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-left justify-start h-auto py-2 px-3 text-xs"
+                          onClick={() => handleSendMessage(q)}
+                        >
+                          {q}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
               )}
 
@@ -266,10 +301,11 @@ export default function Insights() {
                   placeholder="Faça uma pergunta sobre seus dados..."
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyDown={(e) => e.key === 'Enter' && !isChatLoading && handleSendMessage()}
                   className="text-sm"
+                  disabled={isChatLoading}
                 />
-                <Button size="icon" onClick={handleSendMessage}>
+                <Button size="icon" onClick={() => handleSendMessage()} disabled={isChatLoading}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
