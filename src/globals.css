@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #1E3A5F;
+    --primary-light: #2E86AB;
+    --accent: #2E86AB;
+    --background: #F8FAFC;
+    --foreground: #0F172A;
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;
+    --muted: #F1F5F9;
+    --muted-foreground: #64748B;
+    --border: #E2E8F0;
+    --input: #E2E8F0;
+    --ring: #2E86AB;
+    --radius: 8px;
+    
+    /* Channel colors */
+    --channel-paid-search: #2563EB;
+    --channel-paid-social: #F59E0B;
+    --channel-organic-search: #10B981;
+    --channel-organic-social: #8B5CF6;
+    --channel-email: #EC4899;
+    --channel-direct: #6B7280;
+    --channel-referral: #14B8A6;
+    --channel-unknown: #94A3B8;
+  }
+
+  .dark {
+    --primary: #2E86AB;
+    --primary-light: #3B9FC7;
+    --background: #0F172A;
+    --foreground: #F1F5F9;
+    --card: #1E293B;
+    --card-foreground: #F1F5F9;
+    --muted: #334155;
+    --muted-foreground: #94A3B8;
+    --border: #334155;
+    --input: #334155;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+}
+
+@layer utilities {
+  .channel-paid-search {
+    @apply bg-[#2563EB] text-white;
+  }
+  .channel-paid-social {
+    @apply bg-[#F59E0B] text-white;
+  }
+  .channel-organic-search {
+    @apply bg-[#10B981] text-white;
+  }
+  .channel-organic-social {
+    @apply bg-[#8B5CF6] text-white;
+  }
+  .channel-email {
+    @apply bg-[#EC4899] text-white;
+  }
+  .channel-direct {
+    @apply bg-[#6B7280] text-white;
+  }
+  .channel-referral {
+    @apply bg-[#14B8A6] text-white;
+  }
+  .channel-unknown {
+    @apply bg-[#94A3B8] text-white;
+  }
+
+  .skeleton {
+    @apply animate-pulse bg-muted rounded;
+  }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+}
